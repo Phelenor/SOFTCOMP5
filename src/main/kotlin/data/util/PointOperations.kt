@@ -1,11 +1,71 @@
 package data.util
 
 import androidx.compose.ui.geometry.Offset
+import data.LabeledData
 import data.Point2D
+import signs
 import java.io.File
 import kotlin.math.*
 
 object PointOperations {
+
+    fun loadData(): List<LabeledData> {
+        val samples = signs.map { sign ->
+            parseGestureFile("$sign-coordinates.txt")
+        }
+
+        val data = samples.mapIndexed { index, gesturesForSign ->
+            val representativePoints = gesturesForSign.map { gesture -> getRepresentativePoints(20, gesture) }
+            LabeledData(representativePoints, index)
+        }
+
+        return data
+    }
+
+    fun parseGestureFile(path: String): List<List<Point2D>> {
+        val gestures = mutableListOf<List<Point2D>>()
+        val content = File(path).readText()
+        val gestureStrings = content.trim().split("NEXT\n")
+
+        for (gestureString in gestureStrings) {
+            val points = gestureString.trim().split("\n")
+                .filter { it.isNotEmpty() }
+                .map { line ->
+                    val (x, y) = line.split(", ").map { it.toDouble() }
+                    Point2D(x, y)
+                }
+            gestures.add(points)
+        }
+
+        return gestures
+    }
+
+    fun getRepresentativePoints(representativeCount: Int, points: List<Point2D>): List<Point2D> {
+        val length = points.zipWithNext { a, b -> distanceTo(a, b) }.sum()
+        val interval = length / (representativeCount - 1)
+        val representativePoints = mutableListOf(points.first())
+
+        var currentDistance = 0.0
+        var nextDistanceThreshold = 0.0
+
+        for (i in 0 until points.lastIndex) {
+            val current = points[i]
+            val next = points[i + 1]
+            val segmentLength = distanceTo(current, next)
+            currentDistance += segmentLength
+
+            while (currentDistance >= nextDistanceThreshold && representativePoints.size < representativeCount) {
+                representativePoints.add(next)
+                nextDistanceThreshold += interval
+            }
+        }
+
+        if (representativePoints.last() != points.last()) {
+            representativePoints.add(points.last())
+        }
+
+        return representativePoints.distinct()
+    }
 
     fun interpolatePoints(start: Offset, end: Offset): List<Offset> {
         val distance = distanceTo(start, end)
@@ -19,6 +79,7 @@ object PointOperations {
     }
 
     fun distanceTo(start: Offset, end: Offset) = sqrt((end.x - start.x).pow(2) + (end.y - start.y).pow(2))
+    fun distanceTo(start: Point2D, end: Point2D) = sqrt((end.x - start.x).pow(2) + (end.y - start.y).pow(2))
 
     fun lerp(start: Float, end: Float, fraction: Float): Float = start + (end - start) * fraction
 

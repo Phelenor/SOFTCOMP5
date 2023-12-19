@@ -1,0 +1,4 @@
+package neural
+
+class NeuralNetwork {
+}

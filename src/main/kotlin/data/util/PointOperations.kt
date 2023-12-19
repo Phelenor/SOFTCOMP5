@@ -3,23 +3,49 @@ package data.util
 import androidx.compose.ui.geometry.Offset
 import data.LabeledData
 import data.Point2D
+import org.jetbrains.kotlinx.multik.api.mk
 import signs
 import java.io.File
 import kotlin.math.*
 
 object PointOperations {
 
-    fun loadData(): List<LabeledData> {
-        val samples = signs.map { sign ->
+    fun loadData(representativeCount: Int = 30): List<LabeledData> {
+        val samplesForSign = signs.associateWith { sign ->
             parseGestureFile("$sign-coordinates.txt")
+        }.toMutableMap()
+
+        signs.forEach { sign ->
+            samplesForSign[sign] = samplesForSign[sign]?.map {
+                getRepresentativePoints(representativeCount, it)
+            } ?: emptyList()
         }
 
-        val data = samples.mapIndexed { index, gesturesForSign ->
-            val representativePoints = gesturesForSign.map { gesture -> getRepresentativePoints(20, gesture) }
-            LabeledData(representativePoints, index)
+
+        val data = mutableListOf<LabeledData>()
+
+        signs.forEachIndexed { index, sign ->
+            val oneHot = getOneHotForIndex(index)
+            val samples = samplesForSign[sign] ?: emptyList()
+
+            for (sample in samples) {
+                val points = sample.flatMap { point -> listOf(point.x, point.y) }
+                data.add(LabeledData(points, oneHot))
+            }
         }
 
         return data
+    }
+
+    fun getOneHotForIndex(index: Int): List<Double> {
+        return when (index) {
+            0 -> mk[1.0, 0.0, 0.0, 0.0, 0.0]
+            1 -> mk[0.0, 1.0, 0.0, 0.0, 0.0]
+            2 -> mk[0.0, 0.0, 1.0, 0.0, 0.0]
+            3 -> mk[0.0, 0.0, 0.0, 1.0, 0.0]
+            4 -> mk[0.0, 0.0, 0.0, 0.0, 1.0]
+            else -> emptyList()
+        }
     }
 
     fun parseGestureFile(path: String): List<List<Point2D>> {
@@ -60,16 +86,14 @@ object PointOperations {
             }
         }
 
-        if (representativePoints.last() != points.last()) {
-            representativePoints.add(points.last())
-        }
+        representativePoints[representativePoints.lastIndex] = points.last()
 
-        return representativePoints.distinct()
+        return representativePoints
     }
 
     fun interpolatePoints(start: Offset, end: Offset): List<Offset> {
         val distance = distanceTo(start, end)
-        val numberOfPoints = max(1, distance.roundToInt())
+        val numberOfPoints = max(1, distance.roundToInt() / 4)
         return List(numberOfPoints) { step ->
             Offset(
                 lerp(start.x, end.x, step.toFloat() / numberOfPoints),

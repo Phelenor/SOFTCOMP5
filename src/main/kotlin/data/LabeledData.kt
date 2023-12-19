@@ -1,6 +1,7 @@
 package data
 
+
 data class LabeledData(
-    val points: List<List<Point2D>>,
-    val label: Int
+    val values: List<Double>,
+    val label: List<Double>
 )

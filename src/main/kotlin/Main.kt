@@ -6,7 +6,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
-import androidx.compose.material.MaterialTheme.colors
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,6 +19,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import data.LabeledData
 import data.util.PointOperations
+import neural.NeuralNetwork
 import ui.BasicAlertDialog
 
 private const val TRAIN = 0
@@ -31,6 +31,7 @@ val signs = listOf("α", "β", "γ", "δ", "ε")
 @Composable
 @Preview
 fun App() {
+
     MaterialTheme {
         var selectedMode by remember { mutableStateOf(TRAIN) }
         var selectedCharacter by remember { mutableStateOf(signs.firstOrNull()) }
@@ -43,6 +44,8 @@ fun App() {
 
         var dialogMessage by remember { mutableStateOf("") }
         var showDialog by remember { mutableStateOf(false) }
+
+        var model by remember { mutableStateOf(NeuralNetwork()) }
 
         if (showDialog) {
             BasicAlertDialog("Info", dialogMessage) {

@@ -1,0 +1,13 @@
+{
+  "representativePoints": 30,
+  "mode": "MBGD",
+  "learningRate": 0.2,
+  "epsilon": 0.0001,
+  "epochs": 10000,
+  "layers": [
+    60,
+    12,
+    6,
+    5
+  ]
+}

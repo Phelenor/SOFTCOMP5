@@ -12,7 +12,7 @@ object PointOperations {
 
     fun loadData(representativeCount: Int = 30): List<LabeledData> {
         val samplesForSign = signs.associateWith { sign ->
-            parseGestureFile("$sign-coordinates.txt")
+            parseGestureFile("data/$sign-coordinates.txt")
         }.toMutableMap()
 
         signs.forEach { sign ->
@@ -34,7 +34,7 @@ object PointOperations {
             }
         }
 
-        return data.shuffled()
+        return data //.shuffled()
     }
 
     fun getOneHotForIndex(index: Int): List<Double> {
@@ -118,7 +118,7 @@ object PointOperations {
     }
 
     fun saveCoordinates(sign: String, points: List<List<Offset>>) {
-        val file = File("$sign-coordinates.txt")
+        val file = File("data/$sign-coordinates.txt")
 
         file.bufferedWriter().use { out ->
             points.forEachIndexed { index, character ->

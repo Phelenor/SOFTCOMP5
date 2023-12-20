@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import com.google.gson.Gson
 import data.LabeledData
 import util.PointOperations
 import neural.NeuralNetwork
@@ -24,6 +25,7 @@ import org.jetbrains.kotlinx.multik.api.mk
 import org.jetbrains.kotlinx.multik.api.ndarray
 import ui.BasicAlertDialog
 import data.Config
+import java.io.FileReader
 
 private const val TRAIN = 0
 private const val PREDICT = 1
@@ -36,30 +38,26 @@ val signs = listOf("α", "β", "γ", "δ", "ε")
 fun App() {
 
     MaterialTheme {
-        val config = Config(
-            layers = mutableListOf(60, 12, 6, 5),
-            representativePoints = 30,
-            learningRate = 0.2,
-            mode = "mini_batch",
-            epochs = 10000,
-            epsilon = 0.001
-        )
-
-        config.layers[0] = config.representativePoints * 2
-        config.layers[config.layers.lastIndex] = 5
+        val config = Gson().fromJson(FileReader("config.json"), Config::class.java).apply {
+            layers[0] = representativePoints * 2
+            layers[layers.lastIndex] = 5
+        }
 
         var selectedMode by remember { mutableStateOf(TRAIN) }
-        var selectedCharacter by remember { mutableStateOf(signs.firstOrNull()) }
+        var selectedSign by remember { mutableStateOf(signs.firstOrNull()) }
+
         var counter by remember { mutableStateOf(0) }
         val pointsGroup = remember { mutableStateListOf<List<Offset>>() }
         val points = remember { mutableStateListOf<Offset>() }
         var lastPoint = remember { Offset.Unspecified }
+
+        val model by remember { mutableStateOf(NeuralNetwork(config.layers)) }
         var data by remember { mutableStateOf<List<LabeledData>>(emptyList()) }
         var isTrained by remember { mutableStateOf(false) }
+        var predictedSign by remember { mutableStateOf("") }
+
         var dialogMessage by remember { mutableStateOf("") }
         var showDialog by remember { mutableStateOf(false) }
-        val model by remember { mutableStateOf(NeuralNetwork(config.layers)) }
-        var predictedSign by remember { mutableStateOf("") }
 
         if (showDialog) {
             BasicAlertDialog("Info", dialogMessage) {
@@ -88,7 +86,7 @@ fun App() {
                             onClick = {
                                 selectedMode = mode
                                 predictedSign = ""
-                                selectedCharacter = if (selectedMode == PREDICT) null else signs.first()
+                                selectedSign = if (selectedMode == PREDICT) null else signs.first()
                                 counter = 0
                                 pointsGroup.clear()
                                 points.clear()
@@ -107,11 +105,11 @@ fun App() {
                     Row {
                         Button(
                             onClick = {
-                                selectedCharacter?.let {
+                                selectedSign?.let {
                                     if (pointsGroup.size >= 20) {
                                         PointOperations.saveCoordinates(it, pointsGroup.toList())
                                     } else {
-                                        dialogMessage = "Draw at least 20 samples for $selectedCharacter."
+                                        dialogMessage = "Draw at least 20 samples for $selectedSign."
                                         showDialog = true
                                     }
                                 }
@@ -128,7 +126,7 @@ fun App() {
                         Spacer(Modifier.width(4.dp))
 
                         Button(
-                            onClick = { data = PointOperations.loadData() },
+                            onClick = { data = PointOperations.loadData(config.representativePoints) },
                             colors = ButtonDefaults.buttonColors(backgroundColor = Color.White),
                             shape = RoundedCornerShape(16.dp)
                         ) {
@@ -229,14 +227,14 @@ fun App() {
 
             Row(modifier = Modifier.fillMaxWidth().padding(4.dp).background(shape = RoundedCornerShape(16.dp), color = Color(0xFF374df5)), horizontalArrangement = Arrangement.SpaceEvenly) {
                 signs.forEach { sign ->
-                    val isSelected = (selectedMode == TRAIN && selectedCharacter == sign) || (selectedMode == PREDICT && predictedSign == sign)
+                    val isSelected = (selectedMode == TRAIN && selectedSign == sign) || (selectedMode == PREDICT && predictedSign == sign)
                     FilterChip(
                         selected = isSelected,
                         shape = RoundedCornerShape(8.dp),
                         border = if (isSelected) BorderStroke(width = 2.dp, color = Color.Red) else null,
                         colors = ChipDefaults.filterChipColors(backgroundColor = Color.White, selectedBackgroundColor = Color.White),
                         onClick = {
-                            selectedCharacter = sign
+                            selectedSign = sign
                             counter = 0
                             pointsGroup.clear()
                             points.clear()

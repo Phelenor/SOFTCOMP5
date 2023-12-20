@@ -18,9 +18,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import data.LabeledData
-import data.util.PointOperations
+import util.PointOperations
 import neural.NeuralNetwork
+import org.jetbrains.kotlinx.multik.api.mk
+import org.jetbrains.kotlinx.multik.api.ndarray
 import ui.BasicAlertDialog
+import data.Config
 
 private const val TRAIN = 0
 private const val PREDICT = 1
@@ -33,6 +36,18 @@ val signs = listOf("α", "β", "γ", "δ", "ε")
 fun App() {
 
     MaterialTheme {
+        val config = Config(
+            layers = mutableListOf(60, 12, 6, 5),
+            representativePoints = 30,
+            learningRate = 0.2,
+            mode = "mini_batch",
+            epochs = 10000,
+            epsilon = 0.001
+        )
+
+        config.layers[0] = config.representativePoints * 2
+        config.layers[config.layers.lastIndex] = 5
+
         var selectedMode by remember { mutableStateOf(TRAIN) }
         var selectedCharacter by remember { mutableStateOf(signs.firstOrNull()) }
         var counter by remember { mutableStateOf(0) }
@@ -41,11 +56,10 @@ fun App() {
         var lastPoint = remember { Offset.Unspecified }
         var data by remember { mutableStateOf<List<LabeledData>>(emptyList()) }
         var isTrained by remember { mutableStateOf(false) }
-
         var dialogMessage by remember { mutableStateOf("") }
         var showDialog by remember { mutableStateOf(false) }
-
-        var model by remember { mutableStateOf(NeuralNetwork()) }
+        val model by remember { mutableStateOf(NeuralNetwork(config.layers)) }
+        var predictedSign by remember { mutableStateOf("") }
 
         if (showDialog) {
             BasicAlertDialog("Info", dialogMessage) {
@@ -73,6 +87,7 @@ fun App() {
                             colors = ChipDefaults.filterChipColors(backgroundColor = Color.White, disabledBackgroundColor = Color.LightGray, selectedBackgroundColor = Color.White),
                             onClick = {
                                 selectedMode = mode
+                                predictedSign = ""
                                 selectedCharacter = if (selectedMode == PREDICT) null else signs.first()
                                 counter = 0
                                 pointsGroup.clear()
@@ -123,7 +138,12 @@ fun App() {
                         Spacer(Modifier.width(4.dp))
 
                         Button(
-                            onClick = { isTrained = true },
+                            onClick = {
+                                val X = mk.ndarray(data.map { it.values })
+                                val y = mk.ndarray(data.map { it.label })
+                                model.train(X.transpose(), y.transpose(), epochs = config.epochs, learningRate = config.learningRate, epsilon = config.epsilon)
+                                isTrained = true
+                            },
                             colors = ButtonDefaults.buttonColors(backgroundColor = Color.White, disabledBackgroundColor = Color.LightGray),
                             shape = RoundedCornerShape(16.dp),
                             enabled = data.isNotEmpty()
@@ -142,50 +162,87 @@ fun App() {
                 }
             }
 
-            Canvas(modifier = Modifier.weight(1f).fillMaxSize().pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        lastPoint = offset
-                        points.add(offset)
-                    },
-                    onDragEnd = {
-                        pointsGroup.add(points.toList())
-                        points.clear()
-                        counter++
+            if (selectedMode == PREDICT) {
+                Canvas(modifier = Modifier.weight(1f).fillMaxSize().pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            predictedSign = ""
+                            pointsGroup.clear()
+                            points.clear()
+                            lastPoint = offset
+                            points.add(offset)
+                        },
+                        onDragEnd = {
+                            pointsGroup.add(points.toList())
+                            val adjusted = PointOperations.adjustPoints(points)
+                            val representatives = PointOperations.getRepresentativePoints(config.representativePoints, adjusted)
+                            val X = mk.ndarray(listOf(representatives.flatMap { point -> listOf(point.x, point.y) }))
+                            val predictions = model.predict(X.transpose())
+                            predictedSign = signs[mk.math.argMax(predictions)]
+                            println(signs[mk.math.argMax(predictions)])
+                        }
+                    ) { change, _ ->
+                        val newPoint = change.position
+                        points.addAll(PointOperations.interpolatePoints(lastPoint, newPoint))
+                        lastPoint = newPoint
                     }
-                ) { change, _ ->
-                    val newPoint = change.position
-                    points.addAll(PointOperations.interpolatePoints(lastPoint, newPoint))
-                    lastPoint = newPoint
                 }
-            }
-            ) {
-                points.forEach { point ->
-                    drawCircle(
-                        color = Color.Magenta,
-                        center = point,
-                        radius = 1f,
-                        style = Stroke(width = 1f)
-                    )
+                ) {
+                    points.forEach { point ->
+                        drawCircle(
+                            color = Color.Magenta,
+                            center = point,
+                            radius = 1f,
+                            style = Stroke(width = 1f)
+                        )
+                    }
+                }
+            } else {
+                Canvas(modifier = Modifier.weight(1f).fillMaxSize().pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            lastPoint = offset
+                            points.add(offset)
+                        },
+                        onDragEnd = {
+                            pointsGroup.add(points.toList())
+                            points.clear()
+                            counter++
+                        }
+                    ) { change, _ ->
+                        val newPoint = change.position
+                        points.addAll(PointOperations.interpolatePoints(lastPoint, newPoint))
+                        lastPoint = newPoint
+                    }
+                }
+                ) {
+                    points.forEach { point ->
+                        drawCircle(
+                            color = Color.Magenta,
+                            center = point,
+                            radius = 1f,
+                            style = Stroke(width = 1f)
+                        )
+                    }
                 }
             }
 
             Row(modifier = Modifier.fillMaxWidth().padding(4.dp).background(shape = RoundedCornerShape(16.dp), color = Color(0xFF374df5)), horizontalArrangement = Arrangement.SpaceEvenly) {
-                signs.forEach { character ->
-                    val isSelected = selectedCharacter == character
+                signs.forEach { sign ->
+                    val isSelected = (selectedMode == TRAIN && selectedCharacter == sign) || (selectedMode == PREDICT && predictedSign == sign)
                     FilterChip(
                         selected = isSelected,
                         shape = RoundedCornerShape(8.dp),
                         border = if (isSelected) BorderStroke(width = 2.dp, color = Color.Red) else null,
                         colors = ChipDefaults.filterChipColors(backgroundColor = Color.White, selectedBackgroundColor = Color.White),
                         onClick = {
-                            selectedCharacter = character
+                            selectedCharacter = sign
                             counter = 0
                             pointsGroup.clear()
                             points.clear()
                         }) {
                         Text(
-                            text = character,
+                            text = sign,
                             fontSize = if (isSelected) 32.sp else 16.sp,
                             color = if (isSelected) Color.Red else Color(0xFF374df5)
                         )
@@ -199,7 +256,7 @@ fun App() {
 
 fun main() = application {
     Window(
-        title = "Greek Character Drawing",
+        title = "Slijepi Ahilej pogađa slova",
         onCloseRequest = ::exitApplication
     ) {
         App()

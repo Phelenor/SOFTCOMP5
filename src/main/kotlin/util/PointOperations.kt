@@ -1,4 +1,4 @@
-package data.util
+package util
 
 import androidx.compose.ui.geometry.Offset
 import data.LabeledData
@@ -34,7 +34,7 @@ object PointOperations {
             }
         }
 
-        return data
+        return data.shuffled()
     }
 
     fun getOneHotForIndex(index: Int): List<Double> {

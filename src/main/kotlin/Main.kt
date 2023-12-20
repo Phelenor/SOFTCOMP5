@@ -13,6 +13,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
@@ -25,6 +26,8 @@ import org.jetbrains.kotlinx.multik.api.mk
 import org.jetbrains.kotlinx.multik.api.ndarray
 import ui.BasicAlertDialog
 import data.Config
+import org.jetbrains.kotlinx.multik.ndarray.data.get
+import org.jetbrains.kotlinx.multik.ndarray.operations.map
 import java.io.FileReader
 
 private const val TRAIN = 0
@@ -55,6 +58,7 @@ fun App() {
         var data by remember { mutableStateOf<List<LabeledData>>(emptyList()) }
         var isTrained by remember { mutableStateOf(false) }
         var predictedSign by remember { mutableStateOf("") }
+        var predictions by remember { mutableStateOf("") }
 
         var dialogMessage by remember { mutableStateOf("") }
         var showDialog by remember { mutableStateOf(false) }
@@ -86,6 +90,7 @@ fun App() {
                             onClick = {
                                 selectedMode = mode
                                 predictedSign = ""
+                                predictions = ""
                                 selectedSign = if (selectedMode == PREDICT) null else signs.first()
                                 counter = 0
                                 pointsGroup.clear()
@@ -157,6 +162,13 @@ fun App() {
                         fontSize = 24.sp,
                         color = Color.White
                     )
+                } else {
+                    Text(
+                        text = predictions,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        fontSize = 16.sp
+                    )
                 }
             }
 
@@ -165,6 +177,7 @@ fun App() {
                     detectDragGestures(
                         onDragStart = { offset ->
                             predictedSign = ""
+                            predictions = ""
                             pointsGroup.clear()
                             points.clear()
                             lastPoint = offset
@@ -175,9 +188,11 @@ fun App() {
                             val adjusted = PointOperations.adjustPoints(points)
                             val representatives = PointOperations.getRepresentativePoints(config.representativePoints, adjusted)
                             val X = mk.ndarray(listOf(representatives.flatMap { point -> listOf(point.x, point.y) }))
-                            val predictions = model.predict(X.transpose())
-                            predictedSign = signs[mk.math.argMax(predictions)]
-                            println(signs[mk.math.argMax(predictions)])
+                            val predictionValues = model.predict(X.transpose())
+                            predictedSign = signs[mk.math.argMax(predictionValues)]
+                            predictions = predictionValues.transpose()[0].map { String.format("%.3f", it).toDouble() }.toString()
+                            println(predictions)
+                            println(signs[mk.math.argMax(predictionValues)])
                         }
                     ) { change, _ ->
                         val newPoint = change.position
